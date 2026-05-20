@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-    "module": "Node16",
+    "module": "CommonJS",
     "target": "ES2022",
     "types": ["node"],
     "sourceMap": true,
@@ -8,13 +8,14 @@
     "declarationMap": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "moduleResolution": "node16",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": false,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
+    "moduleDetection": "auto",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true

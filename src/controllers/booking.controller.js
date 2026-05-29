@@ -11,33 +11,42 @@ const createBookingSchema = z.object({
 const createBooking = catchAsync(async (req, res) => {
   const { eventId, quantity } = createBookingSchema.parse(req.body);
 
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) throw new AppError('Event not found', 404);
-  if (event.status !== 'PUBLISHED') throw new AppError('Event is not available for booking', 400);
-  if (new Date(event.date) <= new Date()) throw new AppError('Event has already passed', 400);
+  const booking = await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw`
+      SELECT "id", "title", "date", "venue", "capacity", "price", "status"
+      FROM "events"
+      WHERE "id" = ${eventId}
+      FOR UPDATE
+    `;
 
-  // Tổng vé đã book (CONFIRMED)
-  const bookedResult = await prisma.booking.aggregate({
-    where: { eventId, status: 'CONFIRMED' },
-    _sum: { quantity: true },
-  });
-  const totalBooked = bookedResult._sum.quantity ?? 0;
-  const available = event.capacity - totalBooked;
+    if (rows.length === 0) throw new AppError('Event not found', 404);
 
-  if (quantity > available) {
-    throw new AppError(
-      available === 0 ? 'Event is sold out' : `Only ${available} tickets available`,
-      409
-    );
-  }
+    const event = rows[0];
+    if (event.status !== 'PUBLISHED') throw new AppError('Event is not available for booking', 400);
+    if (new Date(event.date) <= new Date()) throw new AppError('Event has already passed', 400);
 
-  const totalPrice = Number(event.price) * quantity;
+    const bookedResult = await tx.booking.aggregate({
+      where: { eventId, status: 'CONFIRMED' },
+      _sum: { quantity: true },
+    });
+    const totalBooked = bookedResult._sum.quantity ?? 0;
+    const available = Number(event.capacity) - totalBooked;
 
-  const booking = await prisma.booking.create({
-    data: { eventId, userId: req.user.id, quantity, totalPrice, status: 'CONFIRMED' },
-    include: {
-      event: { select: { id: true, title: true, date: true, venue: true, price: true } },
-    },
+    if (quantity > available) {
+      throw new AppError(
+        available === 0 ? 'Event is sold out' : `Only ${available} tickets available`,
+        409
+      );
+    }
+
+    const totalPrice = Number(event.price) * quantity;
+
+    return tx.booking.create({
+      data: { eventId, userId: req.user.id, quantity, totalPrice, status: 'CONFIRMED' },
+      include: {
+        event: { select: { id: true, title: true, date: true, venue: true, price: true } },
+      },
+    });
   });
 
   res.status(201).json({ status: 'success', data: { booking } });
